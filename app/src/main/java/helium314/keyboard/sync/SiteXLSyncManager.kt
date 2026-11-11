@@ -4,6 +4,7 @@ import android.content.Context
 import android.content.SharedPreferences
 import android.content.Intent
 import android.os.Build
+import android.provider.UserDictionary
 import android.security.keystore.KeyGenParameterSpec
 import android.security.keystore.KeyProperties
 import android.util.Base64
@@ -79,6 +80,14 @@ object SiteXLSyncManager {
         @SerialName("sha256") val sha256: String,
         @SerialName("updated_at") val updatedAt: Long,
         @SerialName("size_bytes") val sizeBytes: Int = 0
+    )
+
+    @Serializable
+    private data class PersonalDictionaryWord(
+        val word: String,
+        val shortcut: String? = null,
+        val frequency: Int,
+        val locale: String? = null
     )
 
     @Serializable
@@ -343,6 +352,7 @@ object SiteXLSyncManager {
             val regularPrefs = context.prefs().all.filterKeys { it != Settings.PREF_SERVER_URL }
             putText(zip, "preferences.json", encodeSettings(regularPrefs))
             putText(zip, "protected_preferences.json", encodeSettings(context.protectedPrefs().all))
+            putText(zip, "personal_dictionary.json", json.encodeToString(collectPersonalDictionary(context)))
             val roots = listOf(
                 context.filesDir to "files",
                 DeviceProtectedUtils.getFilesDir(context) to "device"
@@ -363,6 +373,69 @@ object SiteXLSyncManager {
             throw IOException("Settings backup exceeds 25 MB. Remove large custom files before syncing.")
         }
         return bytes
+    }
+
+    private fun collectPersonalDictionary(context: Context): List<PersonalDictionaryWord> {
+        val projection = arrayOf(
+            UserDictionary.Words.WORD,
+            UserDictionary.Words.SHORTCUT,
+            UserDictionary.Words.FREQUENCY,
+            UserDictionary.Words.LOCALE
+        )
+        val entries = mutableListOf<PersonalDictionaryWord>()
+        context.contentResolver.query(
+            UserDictionary.Words.CONTENT_URI, projection, null, null, null
+        )?.use { cursor ->
+            val wordIndex = cursor.getColumnIndexOrThrow(UserDictionary.Words.WORD)
+            val shortcutIndex = cursor.getColumnIndexOrThrow(UserDictionary.Words.SHORTCUT)
+            val frequencyIndex = cursor.getColumnIndexOrThrow(UserDictionary.Words.FREQUENCY)
+            val localeIndex = cursor.getColumnIndexOrThrow(UserDictionary.Words.LOCALE)
+            while (cursor.moveToNext()) {
+                val word = cursor.getString(wordIndex)?.takeIf { it.isNotBlank() } ?: continue
+                entries += PersonalDictionaryWord(
+                    word = word,
+                    shortcut = cursor.getString(shortcutIndex)?.takeIf { it.isNotBlank() },
+                    frequency = cursor.getInt(frequencyIndex).coerceIn(0, 255),
+                    locale = cursor.getString(localeIndex)?.takeIf { it.isNotBlank() }
+                )
+            }
+        }
+        return entries.distinctBy { listOf(it.word, it.shortcut.orEmpty(), it.locale.orEmpty()) }
+            .sortedWith(compareBy<PersonalDictionaryWord> { it.locale.orEmpty() }.thenBy { it.word }.thenBy { it.shortcut.orEmpty() })
+    }
+
+    private fun applyPersonalDictionary(context: Context, entries: List<PersonalDictionaryWord>) {
+        if (entries.isEmpty()) return
+        val projection = arrayOf(
+            UserDictionary.Words.WORD,
+            UserDictionary.Words.SHORTCUT,
+            UserDictionary.Words.LOCALE
+        )
+        val existing = mutableSetOf<String>()
+        context.contentResolver.query(
+            UserDictionary.Words.CONTENT_URI, projection, null, null, null
+        )?.use { cursor ->
+            val wordIndex = cursor.getColumnIndexOrThrow(UserDictionary.Words.WORD)
+            val shortcutIndex = cursor.getColumnIndexOrThrow(UserDictionary.Words.SHORTCUT)
+            val localeIndex = cursor.getColumnIndexOrThrow(UserDictionary.Words.LOCALE)
+            while (cursor.moveToNext()) {
+                existing += listOf(
+                    cursor.getString(wordIndex).orEmpty(),
+                    cursor.getString(shortcutIndex).orEmpty(),
+                    cursor.getString(localeIndex).orEmpty()
+                ).joinToString("\u0000")
+            }
+        }
+        entries.forEach { entry ->
+            val key = listOf(entry.word, entry.shortcut.orEmpty(), entry.locale.orEmpty()).joinToString("\u0000")
+            if (key !in existing) {
+                val locale = entry.locale?.replace('_', '-')?.let(Locale::forLanguageTag)
+                UserDictionary.Words.addWord(
+                    context, entry.word, entry.frequency, entry.shortcut, locale
+                )
+                existing += key
+            }
+        }
     }
 
     private fun relativePath(file: File, root: File): String =
@@ -436,6 +509,7 @@ object SiteXLSyncManager {
         val protectedSettings = mutableMapOf<String, Any>()
         val regularFiles = mutableMapOf<String, ByteArray>()
         val protectedFiles = mutableMapOf<String, ByteArray>()
+        var personalDictionary: List<PersonalDictionaryWord> = emptyList()
         ZipInputStream(ByteArrayInputStream(archive)).use { zip ->
             var entry = zip.nextEntry
             var total = 0
@@ -447,6 +521,7 @@ object SiteXLSyncManager {
                     when (entry.name) {
                         "preferences.json" -> regularSettings.putAll(decodeSettings(bytes.decodeToString()))
                         "protected_preferences.json" -> protectedSettings.putAll(decodeSettings(bytes.decodeToString()))
+                        "personal_dictionary.json" -> personalDictionary = json.decodeFromString(bytes.decodeToString())
                         else -> {
                             val isDevice = entry.name.startsWith("device/")
                             val isFiles = entry.name.startsWith("files/")
@@ -482,6 +557,7 @@ object SiteXLSyncManager {
         } finally {
             Settings.getInstance().startListener()
         }
+        applyPersonalDictionary(context, personalDictionary)
         LayoutUtilsCustom.onLayoutFileChanged()
         SubtypeSettings.reloadEnabledSubtypes(context)
         context.sendBroadcast(Intent(DictionaryPackConstants.NEW_DICTIONARY_INTENT_ACTION))

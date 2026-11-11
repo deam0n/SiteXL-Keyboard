@@ -151,7 +151,7 @@ def validate_snapshot(payload: bytes) -> None:
                     or stat.S_ISLNK(unix_mode)
                 ):
                     raise HTTPException(status_code=400, detail="Unsafe snapshot entry")
-                if name not in ("preferences.json", "protected_preferences.json") and not (
+                if name not in ("preferences.json", "protected_preferences.json", "personal_dictionary.json") and not (
                     name.startswith("files/") or name.startswith("device/")
                 ):
                     raise HTTPException(status_code=400, detail="Unexpected snapshot entry")
