@@ -59,7 +59,6 @@ fun AdvancedSettingsScreen(
     if ((b?.value ?: 0) < 0)
         Log.v("irrelevant", "stupid way to trigger recomposition on preference change")
     val items = listOf(
-        Settings.PREF_SERVER_URL,
         Settings.PREF_ALWAYS_INCOGNITO_MODE,
         Settings.PREF_KEY_LONGPRESS_TIMEOUT,
         Settings.PREF_SPACE_HORIZONTAL_SWIPE,
@@ -101,9 +100,6 @@ fun AdvancedSettingsScreen(
 
 @SuppressLint("ApplySharedPref")
 fun createAdvancedSettings(context: Context) = listOf(
-    Setting(context, Settings.PREF_SERVER_URL, R.string.sitexl_server_url_title, R.string.sitexl_server_url_summary) { setting ->
-        TextInputPreference(setting, Defaults.PREF_SERVER_URL)
-    },
     Setting(context, Settings.PREF_ALWAYS_INCOGNITO_MODE,
         R.string.incognito, R.string.prefs_force_incognito_mode_summary)
     {

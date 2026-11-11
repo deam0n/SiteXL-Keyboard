@@ -1326,4 +1326,13 @@ New dictionary:
     <!-- SiteXL self-hosted dictionary server configuration -->
     <string name="sitexl_server_url_title">Self-hosted server URL</string>
     <string name="sitexl_server_url_summary">Server address for future dictionary synchronization. Saved locally; not connected yet.</string>
+    <string name="sitexl_sync_title">SiteXL Sync</string>
+    <string name="sitexl_sync_menu_summary">Synchronise your learned vocabulary and keyboard settings</string>
+    <string name="sitexl_sync_description">Keep your keyboard settings and learned words synchronised across your devices. Standard language dictionaries continue to be managed separately in the existing dictionary settings.</string>
+    <string name="sitexl_sync_server_url">Server URL (HTTPS)</string>
+    <string name="sitexl_sync_api_token">Personal API token</string>
+    <string name="sitexl_sync_daily">Automatic daily sync</string>
+    <string name="sitexl_sync_daily_summary">Synchronise when a network connection is available</string>
+    <string name="sitexl_sync_now">Sync now</string>
+    <string name="sitexl_sync_privacy_note">Only keyboard preferences, personal dictionary files and learned word entries are synchronised. Clipboard history and typed sentences are not uploaded. Use HTTPS; the server stores your sync data in its own database.</string>
 </resources>

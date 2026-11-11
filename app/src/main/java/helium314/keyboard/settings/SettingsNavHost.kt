@@ -28,6 +28,7 @@ import helium314.keyboard.settings.screens.MainSettingsScreen
 import helium314.keyboard.settings.screens.PersonalDictionariesScreen
 import helium314.keyboard.settings.screens.PersonalDictionaryScreen
 import helium314.keyboard.settings.screens.PreferencesScreen
+import helium314.keyboard.settings.screens.SiteXLSyncScreen
 import helium314.keyboard.settings.screens.SecondaryLayoutScreen
 import helium314.keyboard.settings.screens.SubtypeScreen
 import helium314.keyboard.settings.screens.TextCorrectionScreen
@@ -78,8 +79,12 @@ fun SettingsNavHost(
                 onClickLanguage = { navController.navigate(SettingsDestination.Languages) },
                 onClickLayouts = { navController.navigate(SettingsDestination.Layouts) },
                 onClickDictionaries = { navController.navigate(SettingsDestination.Dictionaries) },
+                onClickSiteXLSync = { navController.navigate(SettingsDestination.SiteXLSync) },
                 onClickBack = ::goBack,
             )
+        }
+        composable(SettingsDestination.SiteXLSync) {
+            SiteXLSyncScreen(onClickBack = ::goBack)
         }
         composable(SettingsDestination.About) {
             AboutScreen(onClickBack = ::goBack)
@@ -147,6 +152,7 @@ fun SettingsNavHost(
 object SettingsDestination {
     const val Settings = "settings"
     const val About = "about"
+    const val SiteXLSync = "sitexl_sync"
     const val TextCorrection = "text_correction"
     const val Preferences = "preferences"
     const val Toolbar = "toolbar"

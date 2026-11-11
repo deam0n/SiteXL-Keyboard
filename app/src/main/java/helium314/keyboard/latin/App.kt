@@ -15,6 +15,8 @@ import helium314.keyboard.latin.utils.Log
 import helium314.keyboard.latin.utils.SubtypeSettings
 import helium314.keyboard.latin.utils.prefs
 import helium314.keyboard.latin.utils.upgradeToolbarPrefs
+import helium314.keyboard.sync.SiteXLSyncManager
+import helium314.keyboard.sync.SiteXLSyncScheduler
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.joinAll
@@ -44,6 +46,8 @@ class App : Application() {
             scope.launch { Defaults.initDynamicDefaults(ctx) }
         )
         runBlocking { jobs.joinAll() } // word should be finished before anything else is started
+
+        scope.launch { SiteXLSyncScheduler.schedule(ctx, SiteXLSyncManager.isAutoSyncEnabled(ctx)) }
 
         scope.launch { // do some uncritical work in background for faster startup
             SupportedEmojis.load(this@App)

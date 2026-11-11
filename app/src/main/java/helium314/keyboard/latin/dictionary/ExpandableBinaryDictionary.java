@@ -31,6 +31,7 @@ import java.io.File;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.Locale;
+import java.util.List;
 import java.util.Map;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -548,6 +549,89 @@ abstract public class ExpandableBinaryDictionary extends Dictionary {
                 binaryDictionary.flush();
             }
         });
+    }
+
+    /**
+     * Returns a snapshot of the words currently stored in this expandable dictionary.
+     * This is used by SiteXL Sync to share learned vocabulary, not raw text input.
+     */
+    public ArrayList<WordProperty> wordPropertiesForSync() {
+        reloadDictionaryIfRequired();
+        final long deadline = System.currentTimeMillis() + 20_000;
+        while (System.currentTimeMillis() < deadline) {
+            mLock.readLock().lock();
+            try {
+                final BinaryDictionary dictionary = getBinaryDictionary();
+                if (dictionary != null) {
+                    final ArrayList<WordProperty> words = new ArrayList<>();
+                    int token = 0;
+                    do {
+                        final BinaryDictionary.GetNextWordPropertyResult next =
+                                dictionary.getNextWordProperty(token);
+                        token = next.mNextToken;
+                        final WordProperty property = next.mWordProperty;
+                        if (property != null && property.isValid() && !property.mWord.isEmpty()) {
+                            words.add(property);
+                        }
+                    } while (token != 0);
+                    return words;
+                }
+            } finally {
+                mLock.readLock().unlock();
+            }
+            try {
+                Thread.sleep(50);
+            } catch (InterruptedException exception) {
+                Thread.currentThread().interrupt();
+                return new ArrayList<>();
+            }
+            reloadDictionaryIfRequired();
+        }
+        return new ArrayList<>();
+    }
+
+    /**
+     * Merges learned words from SiteXL Sync in one dictionary write operation.
+     */
+    public boolean mergeWordPropertiesForSync(final List<WordProperty> words) {
+        if (words == null || words.isEmpty()) return true;
+        reloadDictionaryIfRequired();
+        final long deadline = System.currentTimeMillis() + 20_000;
+        while (System.currentTimeMillis() < deadline) {
+            mLock.writeLock().lock();
+            try {
+                final BinaryDictionary dictionary = getBinaryDictionary();
+                if (dictionary != null) {
+                    for (final WordProperty property : words) {
+                        if (property == null || property.mWord.isEmpty() || property.mProbabilityInfo == null) {
+                            continue;
+                        }
+                        dictionary.addUnigramEntry(
+                                property.mWord,
+                                property.getProbability(),
+                                null /* shortcutTarget */,
+                                0 /* shortcutProbability */,
+                                false /* isBeginningOfSentence */,
+                                property.mIsNotAWord,
+                                property.mIsPossiblyOffensive,
+                                property.mProbabilityInfo.mTimestamp
+                        );
+                    }
+                    dictionary.flushWithGCIfHasUpdated();
+                    return true;
+                }
+            } finally {
+                mLock.writeLock().unlock();
+            }
+            try {
+                Thread.sleep(50);
+            } catch (InterruptedException exception) {
+                Thread.currentThread().interrupt();
+                return false;
+            }
+            reloadDictionaryIfRequired();
+        }
+        return false;
     }
 
     public DictionaryStats getDictionaryStats() {

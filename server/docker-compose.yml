@@ -1,0 +1,24 @@
+services:
+  sitexl-sync:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: sitexl-sync
+    restart: unless-stopped
+    environment:
+      DATA_DIR: /data
+      MAX_SNAPSHOT_BYTES: 26214400
+      TZ: Europe/Luxembourg
+    ports:
+      - "8787:8000"
+    volumes:
+      - sitexl-sync-data:/data
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health', timeout=3)"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+
+volumes:
+  sitexl-sync-data:
