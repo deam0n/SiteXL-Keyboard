@@ -221,12 +221,13 @@ object SiteXLSyncManager {
                         baseUrl, token, "GET", "/api/v1/sync/settings/${latest.deviceId}", null, "application/zip"
                     )
                     applySettingsSnapshot(context, remoteArchive)
-                    finalHash = sha256(createSettingsSnapshot(context))
                     settingsMessage = "Settings restored from ${latest.deviceName}."
-                } else if (latest == null) {
-                    uploadSettings(baseUrl, token, id, currentArchive)
-                    finalHash = currentHash
-                    settingsMessage = "Initial settings backup uploaded."
+                }
+                val snapshotToRegister = createSettingsSnapshot(context)
+                finalHash = sha256(snapshotToRegister)
+                if (snapshots.none { it.deviceId == id }) {
+                    uploadSettings(baseUrl, token, id, snapshotToRegister)
+                    if (latest == null) settingsMessage = "Initial settings backup uploaded."
                 }
             } else {
                 val localChanged = currentHash != lastHash
@@ -242,7 +243,10 @@ object SiteXLSyncManager {
                         baseUrl, token, "GET", "/api/v1/sync/settings/${latest.deviceId}", null, "application/zip"
                     )
                     applySettingsSnapshot(context, remoteArchive)
-                    finalHash = sha256(createSettingsSnapshot(context))
+                    val restoredArchive = createSettingsSnapshot(context)
+                    finalHash = sha256(restoredArchive)
+                    // Keep a current restore point registered for this device as well.
+                    uploadSettings(baseUrl, token, id, restoredArchive)
                     settingsMessage = "Settings updated from ${latest.deviceName}."
                 } else if (snapshots.none { it.deviceId == id }) {
                     uploadSettings(baseUrl, token, id, currentArchive)
