@@ -429,7 +429,7 @@ object SiteXLSyncManager {
         entries.forEach { entry ->
             val key = listOf(entry.word, entry.shortcut.orEmpty(), entry.locale.orEmpty()).joinToString("\u0000")
             if (key !in existing) {
-                val locale = entry.locale?.replace('_', '-')?.let(Locale::forLanguageTag)
+                val locale = entry.locale?.replace('_', '-')?.let { Locale.forLanguageTag(it) }
                 UserDictionary.Words.addWord(
                     context, entry.word, entry.frequency, entry.shortcut, locale
                 )
