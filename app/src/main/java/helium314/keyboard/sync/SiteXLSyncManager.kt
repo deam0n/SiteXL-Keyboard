@@ -34,6 +34,7 @@ import java.security.MessageDigest
 import java.security.KeyStore
 import java.util.Locale
 import java.util.UUID
+import java.util.zip.CRC32
 import java.util.zip.ZipEntry
 import java.util.zip.ZipInputStream
 import java.util.zip.ZipOutputStream
@@ -375,7 +376,16 @@ object SiteXLSyncManager {
         putBytes(zip, name, value.encodeToByteArray())
 
     private fun putBytes(zip: ZipOutputStream, name: String, bytes: ByteArray) {
-        zip.putNextEntry(ZipEntry(name).apply { time = 0L })
+        // Stored ZIP entries make hashes deterministic across Android/Deflater versions.
+        val crc = CRC32().apply { update(bytes, 0, bytes.size) }.value
+        val entry = ZipEntry(name).apply {
+            time = 0L
+            method = ZipEntry.STORED
+            size = bytes.size.toLong()
+            compressedSize = bytes.size.toLong()
+            this.crc = crc
+        }
+        zip.putNextEntry(entry)
         zip.write(bytes)
         zip.closeEntry()
     }
