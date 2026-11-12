@@ -232,7 +232,7 @@ def normalize_username(username: str) -> str:
     if not USER_ID_RE.fullmatch(normalized):
         raise HTTPException(
             status_code=400,
-            detail="User must be 1–80 characters and may contain letters, numbers, '.', '_' or '-'.",
+            detail="User must be 1–80 characters and may contain letters, numbers, '.', '_', '@' or '-'.",
         )
     return normalized
 
