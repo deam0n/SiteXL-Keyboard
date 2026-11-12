@@ -38,7 +38,7 @@ To revoke a token:
 docker compose exec sitexl-sync python -m app.main revoke-token 'PASTE_TOKEN_HERE'
 ```
 
-There is no public registration endpoint. Accounts and tokens are created by the server administrator.
+Public registration can be turned off again at any time by setting `ALLOW_REGISTRATION=false` and recreating the service. Existing accounts can still sign in.
 
 ## Storage and backups
 
