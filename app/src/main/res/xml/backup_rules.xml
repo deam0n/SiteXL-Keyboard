@@ -3,4 +3,5 @@
     <!-- Keep sync credentials and per-install conflict state on this device only. -->
     <exclude domain="sharedpref" path="sitexl_sync_credentials.xml" />
     <exclude domain="sharedpref" path="sitexl_sync_state.xml" />
+    <exclude domain="sharedpref" path="sitexl_account_state.xml" />
 </full-backup-content>
