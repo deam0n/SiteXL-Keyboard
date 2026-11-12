@@ -24,6 +24,9 @@ jobs:
       - name: Grant execute permission for gradlew
         run: chmod +x gradlew
 
+      - name: Validate sync server Python syntax
+        run: python -m py_compile server/app/main.py
+
       - name: Build with Gradle
         run: ./gradlew assembleDebug
 
