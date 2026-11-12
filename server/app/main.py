@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import base64
 import hashlib
 import io
 import os
@@ -24,6 +25,9 @@ DB_PATH = DATA_DIR / "sitexl-sync.sqlite3"
 MAX_SNAPSHOT_BYTES = int(os.environ.get("MAX_SNAPSHOT_BYTES", str(25 * 1024 * 1024)))
 MAX_ZIP_ENTRIES = 2500
 MAX_VOCABULARY_WORDS_PER_REQUEST = 100000
+ALLOW_REGISTRATION = os.environ.get("ALLOW_REGISTRATION", "false").strip().lower() == "true"
+USER_ID_RE = re.compile(r"^[A-Za-z0-9_.@-]{1,80}$")
+PASSWORD_HASH_ITERATIONS = 310000
 DEVICE_ID_RE = re.compile(r"^[A-Za-z0-9_-]{8,64}$")
 LOCALE_RE = re.compile(r"^[A-Za-z0-9_-]{2,40}$")
 
@@ -57,7 +61,8 @@ def initialize_database() -> None:
             """
             CREATE TABLE IF NOT EXISTS users (
                 user_id TEXT PRIMARY KEY,
-                created_at INTEGER NOT NULL
+                created_at INTEGER NOT NULL,
+                password_hash TEXT
             );
 
             CREATE TABLE IF NOT EXISTS api_tokens (
@@ -98,6 +103,9 @@ def initialize_database() -> None:
                 ON vocabulary(user_id, locale);
             """
         )
+        user_columns = {row["name"] for row in db.execute("PRAGMA table_info(users)").fetchall()}
+        if "password_hash" not in user_columns:
+            db.execute("ALTER TABLE users ADD COLUMN password_hash TEXT")
 
 
 @app.on_event("startup")
@@ -178,9 +186,115 @@ class VocabularyPayload(BaseModel):
     locales: dict[str, list[VocabularyWord]]
 
 
+class AccountPayload(BaseModel):
+    username: str = Field(min_length=1, max_length=80)
+    password: str = Field(min_length=8, max_length=128)
+
+
+def hash_password(password: str) -> str:
+    salt = secrets.token_bytes(16)
+    digest = hashlib.pbkdf2_hmac("sha256", password.encode("utf-8"), salt, PASSWORD_HASH_ITERATIONS)
+    salt_text = base64.urlsafe_b64encode(salt).decode("ascii")
+    digest_text = base64.urlsafe_b64encode(digest).decode("ascii")
+    return "pbkdf2_sha256$" + str(PASSWORD_HASH_ITERATIONS) + "$" + salt_text + "$" + digest_text
+
+
+def verify_password(password: str, stored_hash: str | None) -> bool:
+    if not stored_hash:
+        return False
+    try:
+        algorithm, iterations_text, salt_text, digest_text = stored_hash.split("$", 3)
+        if algorithm != "pbkdf2_sha256":
+            return False
+        iterations = int(iterations_text)
+        if iterations < 100000 or iterations > 2000000:
+            return False
+        salt = base64.urlsafe_b64decode(salt_text.encode("ascii"))
+        expected = base64.urlsafe_b64decode(digest_text.encode("ascii"))
+        actual = hashlib.pbkdf2_hmac("sha256", password.encode("utf-8"), salt, iterations)
+        return secrets.compare_digest(actual, expected)
+    except (ValueError, TypeError):
+        return False
+
+
+def issue_token(db: sqlite3.Connection, user_id: str) -> str:
+    token = secrets.token_urlsafe(36)
+    digest = hashlib.sha256(token.encode("utf-8")).hexdigest()
+    db.execute(
+        "INSERT INTO api_tokens(token_hash, user_id, created_at) VALUES (?, ?, ?)",
+        (digest, user_id, int(time.time())),
+    )
+    return token
+
+
+def normalize_username(username: str) -> str:
+    normalized = username.strip().lower()
+    if not USER_ID_RE.fullmatch(normalized):
+        raise HTTPException(
+            status_code=400,
+            detail="User must be 1–80 characters and may contain letters, numbers, '.', '_' or '-'.",
+        )
+    return normalized
+
+
 @app.get("/health")
-def health() -> dict[str, str]:
-    return {"status": "ok", "service": "sitexl-sync"}
+def health() -> dict[str, str | bool]:
+    return {
+        "status": "ok",
+        "service": "sitexl-sync",
+        "registration_enabled": ALLOW_REGISTRATION,
+    }
+
+
+@app.post("/api/v1/auth/register")
+def register_account(payload: AccountPayload) -> dict[str, str]:
+    if not ALLOW_REGISTRATION:
+        raise HTTPException(status_code=403, detail="Registration is disabled on this server.")
+    username = normalize_username(payload.username)
+    password_digest = hash_password(payload.password)
+    now = int(time.time())
+    with database() as db:
+        try:
+            db.execute(
+                "INSERT INTO users(user_id, created_at, password_hash) VALUES (?, ?, ?)",
+                (username, now, password_digest),
+            )
+        except sqlite3.IntegrityError as exc:
+            raise HTTPException(status_code=409, detail="That username is already registered.") from exc
+        token = issue_token(db, username)
+    return {"username": username, "token": token}
+
+
+@app.post("/api/v1/auth/login")
+def login_account(payload: AccountPayload) -> dict[str, str]:
+    username = normalize_username(payload.username)
+    with database() as db:
+        row = db.execute(
+            "SELECT user_id, password_hash FROM users WHERE user_id = ?",
+            (username,),
+        ).fetchone()
+        if row is None or not verify_password(payload.password, row["password_hash"]):
+            raise HTTPException(status_code=401, detail="Invalid username or password.")
+        token = issue_token(db, str(row["user_id"]))
+    return {"username": username, "token": token}
+
+
+@app.post("/api/v1/auth/logout")
+def logout_account(authorization: str | None = Header(default=None)) -> dict[str, bool]:
+    if not authorization or not authorization.startswith("Bearer "):
+        raise HTTPException(status_code=401, detail="Bearer token required")
+    token = authorization[7:].strip()
+    if len(token) < 32 or len(token) > 256:
+        raise HTTPException(status_code=401, detail="Invalid token")
+    digest = hashlib.sha256(token.encode("utf-8")).hexdigest()
+    with database() as db:
+        cursor = db.execute(
+            "UPDATE api_tokens SET revoked_at = ? WHERE token_hash = ? AND revoked_at IS NULL",
+            (int(time.time()), digest),
+        )
+    if cursor.rowcount == 0:
+        raise HTTPException(status_code=401, detail="Invalid or revoked token")
+    return {"logged_out": True}
 
 
 @app.get("/api/v1/sync/settings")
