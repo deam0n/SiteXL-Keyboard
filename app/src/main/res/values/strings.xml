@@ -1335,4 +1335,23 @@ New dictionary:
     <string name="sitexl_sync_daily_summary">Synchronise when a network connection is available</string>
     <string name="sitexl_sync_now">Sync now</string>
     <string name="sitexl_sync_privacy_note">Only keyboard preferences, personal dictionary files and learned word entries are synchronised. Clipboard history and typed sentences are not uploaded. Use HTTPS; the server stores your sync data in its own database.</string>
+    <!-- SiteXL app identity and account setup -->
+    <string name="sitexl_app_name">SiteXL Keyboard</string>
+    <string name="sitexl_auth_title">Welcome to SiteXL Keyboard</string>
+    <string name="sitexl_auth_description">Sign in to synchronise your keyboard settings and learned words across your devices. You can also use the keyboard without an account.</string>
+    <string name="sitexl_auth_server">Server</string>
+    <string name="sitexl_auth_user">User</string>
+    <string name="sitexl_auth_password">Password</string>
+    <string name="sitexl_auth_login">Log in</string>
+    <string name="sitexl_auth_register">Register an account</string>
+    <string name="sitexl_auth_skip">Skip — use without an account</string>
+    <string name="sitexl_auth_working">Please wait…</string>
+    <string name="sitexl_auth_error_default">Could not sign in. Check your server address and account details.</string>
+    <string name="sitexl_auth_password_hint">Use at least 8 characters</string>
+    <string name="sitexl_sync_signed_in_as">Signed in as %1$s</string>
+    <string name="sitexl_sync_server_label">Sync server: %1$s</string>
+    <string name="sitexl_sync_logout">Log out</string>
+    <string name="sitexl_sync_logout_confirmed">You are signed out on this device.</string>
+    <string name="sitexl_sync_login_required">Sign in to enable settings and vocabulary synchronisation.</string>
+
 </resources>
