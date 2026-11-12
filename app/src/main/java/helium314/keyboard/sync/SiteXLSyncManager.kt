@@ -55,6 +55,7 @@ object SiteXLSyncManager {
     private const val CREDENTIALS_PREFS = "sitexl_sync_credentials"
     private const val STATE_PREFS = "sitexl_sync_state"
     private const val KEY_TOKEN = "api_token"
+    private const val KEY_USERNAME = "username"
     private const val TOKEN_KEY_ALIAS = "SiteXL.Sync.ApiToken"
     private const val KEY_DEVICE_ID = "device_id"
     private const val KEY_LAST_SETTINGS_HASH = "last_settings_hash"
@@ -66,6 +67,17 @@ object SiteXLSyncManager {
     private const val READ_TIMEOUT_MS = 45000
 
     private val json = Json { ignoreUnknownKeys = true; encodeDefaults = true }
+
+    @Serializable
+    private data class AuthRequest(val username: String, val password: String)
+
+    @Serializable
+    private data class AuthResponse(val username: String, val token: String)
+
+    @Serializable
+    private data class AuthErrorResponse(val detail: String = "")
+
+    data class AccountSession(val username: String, val token: String)
 
     @Serializable
     private data class SnapshotListResponse(
@@ -130,6 +142,109 @@ object SiteXLSyncManager {
             }
         }
     }
+
+    fun getUsername(context: Context): String =
+        context.getSharedPreferences(CREDENTIALS_PREFS, Context.MODE_PRIVATE)
+            .getString(KEY_USERNAME, "").orEmpty()
+
+    fun isLoggedIn(context: Context): Boolean = getToken(context).isNotBlank()
+
+    private fun normalizeServerUrl(raw: String): String {
+        if (raw.isBlank()) throw IllegalArgumentException("Enter your SiteXL server URL.")
+        val normalized = raw.trim().trimEnd('/')
+        val parsed = runCatching { URL(normalized) }.getOrElse {
+            throw IllegalArgumentException("The server URL is not valid.")
+        }
+        if (parsed.protocol != "https" || parsed.host.isBlank() || parsed.userInfo != null ||
+            parsed.query != null || parsed.ref != null
+        ) throw IllegalArgumentException("Use a valid HTTPS server URL, without a username, password or query.")
+        return normalized
+    }
+
+    suspend fun authenticate(
+        serverUrl: String,
+        username: String,
+        password: String,
+        register: Boolean
+    ): AccountSession = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+        val baseUrl = normalizeServerUrl(serverUrl)
+        val cleanUsername = username.trim()
+        if (cleanUsername.isBlank()) throw IllegalArgumentException("Enter your username.")
+        if (password.length < 8 || password.length > 128) {
+            throw IllegalArgumentException("Your password must contain between 8 and 128 characters.")
+        }
+        val body = json.encodeToString(AuthRequest(cleanUsername, password)).encodeToByteArray()
+        val path = if (register) "/api/v1/auth/register" else "/api/v1/auth/login"
+        val connection = URL(baseUrl + path).openConnection() as? HttpsURLConnection
+            ?: throw IOException("The server must use HTTPS.")
+        try {
+            connection.requestMethod = "POST"
+            connection.connectTimeout = CONNECT_TIMEOUT_MS
+            connection.readTimeout = READ_TIMEOUT_MS
+            connection.useCaches = false
+            connection.instanceFollowRedirects = false
+            connection.doOutput = true
+            connection.setRequestProperty("Accept", "application/json")
+            connection.setRequestProperty("Content-Type", "application/json")
+            connection.setRequestProperty("Cache-Control", "no-store")
+            connection.setFixedLengthStreamingMode(body.size)
+            connection.outputStream.use { it.write(body) }
+            val code = connection.responseCode
+            val stream = if (code in 200..299) connection.inputStream else connection.errorStream
+            val responseText = stream?.bufferedReader(Charsets.UTF_8)?.use { it.readText().take(16000) }.orEmpty()
+            if (code !in 200..299) {
+                val detail = runCatching { json.decodeFromString<AuthErrorResponse>(responseText).detail }
+                    .getOrNull()?.takeIf { it.isNotBlank() }
+                throw IOException(detail ?: "Authentication failed (HTTP $code).")
+            }
+            val response = json.decodeFromString<AuthResponse>(responseText)
+            if (response.token.isBlank() || response.username.isBlank()) {
+                throw IOException("The server returned an invalid sign-in response.")
+            }
+            AccountSession(response.username, response.token)
+        } finally {
+            connection.disconnect()
+        }
+    }
+
+    fun saveAccount(context: Context, serverUrl: String, username: String, token: String) {
+        val normalized = normalizeServerUrl(serverUrl)
+        context.prefs().edit { putString(Settings.PREF_SERVER_URL, normalized) }
+        context.getSharedPreferences(CREDENTIALS_PREFS, Context.MODE_PRIVATE).edit {
+            putString(KEY_USERNAME, username.trim())
+        }
+        storeToken(context, token)
+    }
+
+    suspend fun logout(context: Context): String =
+        kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+            val token = getToken(context)
+            var message = "You are signed out on this device."
+            try {
+                if (token.isNotBlank()) {
+                    request(serverBaseUrl(context), token, "POST", "/api/v1/auth/logout", ByteArray(0), "application/json")
+                    message = "Signed out. Your session was revoked on the server."
+                }
+            } catch (_: Exception) {
+                message = "Signed out on this device. The server session could not be revoked while offline."
+            } finally {
+                storeToken(context, "")
+                context.getSharedPreferences(CREDENTIALS_PREFS, Context.MODE_PRIVATE).edit {
+                    remove(KEY_USERNAME)
+                    remove(KEY_DEVICE_ID)
+                }
+                statePrefs(context).edit {
+                    remove(KEY_LAST_SETTINGS_HASH)
+                    remove(KEY_LAST_SYNC_AT)
+                    remove("last_sync_completed_at")
+                }
+                context.getSharedPreferences("sitexl_account_state", Context.MODE_PRIVATE).edit {
+                    putBoolean("completed", false)
+                }
+                SiteXLSyncScheduler.schedule(context, false)
+            }
+            message
+        }
 
     @RequiresApi(Build.VERSION_CODES.M)
     private fun getOrCreateTokenKey(): SecretKey {
@@ -196,14 +311,7 @@ object SiteXLSyncManager {
     private fun serverBaseUrl(context: Context): String {
         val raw = context.prefs().getString(Settings.PREF_SERVER_URL, Defaults.PREF_SERVER_URL)?.trim().orEmpty()
         if (raw.isBlank()) throw IllegalStateException("Enter your SiteXL sync server URL first.")
-        val normalized = raw.trimEnd('/')
-        val parsed = runCatching { URL(normalized) }.getOrElse {
-            throw IllegalArgumentException("The server URL is not valid.")
-        }
-        if (parsed.protocol != "https" || parsed.host.isBlank() || parsed.userInfo != null ||
-            parsed.query != null || parsed.ref != null
-        ) throw IllegalArgumentException("Use a valid HTTPS server URL, without a username, password or query.")
-        return normalized
+        return normalizeServerUrl(raw)
     }
 
     suspend fun sync(context: Context): String =
