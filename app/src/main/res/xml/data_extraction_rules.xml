@@ -3,6 +3,7 @@
     <cloud-backup>
         <exclude domain="sharedpref" path="sitexl_sync_credentials.xml" />
         <exclude domain="sharedpref" path="sitexl_sync_state.xml" />
+        <exclude domain="sharedpref" path="sitexl_account_state.xml" />
     </cloud-backup>
     <device-transfer>
         <exclude domain="sharedpref" path="sitexl_sync_credentials.xml" />
