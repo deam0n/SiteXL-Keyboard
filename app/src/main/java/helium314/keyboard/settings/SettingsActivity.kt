@@ -10,6 +10,7 @@ import android.view.inputmethod.EditorInfo
 import android.view.inputmethod.InputMethodManager
 import androidx.activity.ComponentActivity
 import androidx.activity.enableEdgeToEdge
+import androidx.core.content.edit
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.padding
@@ -51,6 +52,8 @@ import helium314.keyboard.settings.dialogs.ConfirmationDialog
 import helium314.keyboard.settings.dialogs.NewDictionaryDialog
 import helium314.keyboard.settings.screens.gesturedata.END_DATE_EPOCH_MILLIS
 import helium314.keyboard.settings.screens.gesturedata.TWO_WEEKS_IN_MILLIS
+import helium314.keyboard.settings.screens.SiteXLAuthScreen
+import helium314.keyboard.sync.SiteXLSyncManager
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -104,6 +107,10 @@ open class SettingsActivity : ComponentActivity(), SharedPreferences.OnSharedPre
                     val dictUri by dictUriFlow.collectAsState()
                     val crashReports by crashReportFiles.collectAsState()
                     val crashFilePicker = filePicker { saveCrashReports(it) }
+                    val accountSetupPrefs = getSharedPreferences("sitexl_account_state", Context.MODE_PRIVATE)
+                    var accountSetupComplete by rememberSaveable {
+                        mutableStateOf(accountSetupPrefs.getBoolean("completed", false) || SiteXLSyncManager.isLoggedIn(this@SettingsActivity))
+                    }
                     var showWelcomeWizard by rememberSaveable { mutableStateOf(
                         !UncachedInputMethodManagerUtils.isThisImeCurrent(this, imm)
                                 || !UncachedInputMethodManagerUtils.isThisImeEnabled(this, imm)
@@ -124,7 +131,19 @@ open class SettingsActivity : ComponentActivity(), SharedPreferences.OnSharedPre
                                 settingsContainer[Settings.PREF_SPELLCHECK_SUGGEST]!!.Preference()
                             }
                         }
-                    else if (showWelcomeWizard) {
+                    else if (!accountSetupComplete) {
+                        SiteXLAuthScreen(
+                            allowSkip = true,
+                            onAuthenticated = {
+                                accountSetupPrefs.edit { putBoolean("completed", true) }
+                                accountSetupComplete = true
+                            },
+                            onSkip = {
+                                accountSetupPrefs.edit { putBoolean("completed", true) }
+                                accountSetupComplete = true
+                            }
+                        )
+                    } else if (showWelcomeWizard) {
                         WelcomeWizard(close = { showWelcomeWizard = false }, finish = this::finish)
                     } else {
                         SettingsNavHost(onClickBack = { this.finish() })
