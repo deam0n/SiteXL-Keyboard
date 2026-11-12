@@ -71,5 +71,5 @@ All `/api/v1/sync` routes require `Authorization: Bearer <token>`.
 - Learned words are merged across devices. The client sends individual dictionary entries only; typed sentences and clipboard history are not uploaded.
 - Manually added Android personal-dictionary words, their shortcuts, frequencies and locale assignments are included in each settings snapshot.
 - Keyboard settings use a latest-snapshot-wins policy. A device downloads a newer remote snapshot when it has no unsynchronised local settings changes. If two devices independently change settings before syncing, the device that uploads last becomes the latest settings snapshot.
-- Server URL and API token are device-local connection credentials and are not included in the settings snapshot. Configure them on each new phone.
+- Server URL and the session token are device-local connection credentials and are not included in the settings snapshot. Sign in on each new phone to obtain its own token.
 - Standard dictionaries and their selection/download flow are not modified by SiteXL Sync.
