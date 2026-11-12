@@ -4,25 +4,33 @@ A small, self-hosted sync API for SiteXL Keyboard. It stores a user's keyboard s
 
 ## Start with Docker
 
-From the `server` directory:
+From the `server` directory, optionally copy `.env.example` to `.env` and edit it before starting the service:
 
 ```sh
+cp .env.example .env
+# Set ALLOW_REGISTRATION=true only when you want users to be able to create accounts.
 docker compose up -d --build
 ```
+
+`ALLOW_REGISTRATION` defaults to `false`. An unset value, an empty value, or anything other than `true` keeps public registration disabled. When disabled, the app displays the server message that registration is disabled. Set `ALLOW_REGISTRATION=true` in the Compose `.env` file to enable self-service account creation.
 
 The API listens on port `8787` on the Docker host. Put it behind your existing reverse proxy and provide HTTPS. In Nginx Proxy Manager, forward the sync hostname to the Docker host on port `8787`, using HTTP between the proxy and this container; configure the public certificate on the proxy. Do not expose port 8787 directly to the internet when the reverse proxy is available.
 
 Use a URL such as `https://sync.example.net` in the keyboard app (without an `/api` suffix).
 
-## Create an account token
+## Accounts and sign-in
 
-Issue a token from the running container:
+On first launch, SiteXL Keyboard asks for the server URL, username and password. Users can sign in or select **Register an account**. Registration is accepted only when `ALLOW_REGISTRATION=true`; otherwise the server returns HTTP 403 with `Registration is disabled on this server.` The app displays that message. The app stores the issued API token in Android Keystore-backed encrypted preferences; the account password is not stored.
+
+Passwords are stored as PBKDF2-HMAC-SHA256 hashes with per-account random salts. The API issues an individual Bearer token at registration/sign-in. Signing out revokes the current token on the server when it is reachable and clears it from the device.
+
+An administrator can still issue a token-only account from the running container:
 
 ```sh
 docker compose exec sitexl-sync python -m app.main create-user ricardo
 ```
 
-The command prints a long Bearer token once. Copy it into **SiteXL Keyboard → SiteXL Sync**. Running the command again with the same user ID issues an additional token for that same account. The server stores only a SHA-256 hash of each token.
+The command prints a long Bearer token once. This legacy administration flow does not create a password for interactive username/password sign-in. The server stores only a SHA-256 hash of each token.
 
 To revoke a token:
 
@@ -45,7 +53,10 @@ Back up the Docker volume regularly. The server stores settings snapshot ZIP fil
 
 Interactive API documentation is available at `/docs` on the private service.
 
-- `GET /health` — service health (no token required).
+- `GET /health` — service health and registration-enabled status (no token required).
+- `POST /api/v1/auth/register` — create an account when registration is enabled.
+- `POST /api/v1/auth/login` — authenticate with username and password and issue a token.
+- `POST /api/v1/auth/logout` — revoke the current Bearer token.
 - `GET /api/v1/sync/settings` — list this user's device snapshots.
 - `PUT /api/v1/sync/settings/{device_id}` — upload or update a settings snapshot.
 - `GET /api/v1/sync/settings/{device_id}` — download a settings snapshot.
