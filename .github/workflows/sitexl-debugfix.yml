@@ -14,37 +14,46 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Check out source
-        uses: actions/checkout@v5
+        uses: actions/checkout@v4
 
-      - name: Set up JDK 21
-        uses: actions/setup-java@v5
+      - name: Cache SiteXL debug signing keystore
+        uses: actions/cache@v4
         with:
-          distribution: temurin
-          java-version: '21'
+          path: ~/.android/sitexl-debug.keystore
+          key: sitexl-debug-keystore-v1
 
-      - name: Install Android SDK components
-        run: |
-          yes | sdkmanager --licenses
-          sdkmanager "platform-tools" "platforms;android-37" "build-tools;37.0.0" "ndk;28.0.13004108"
-
-      - name: Create local debug signing key
+      - name: Create SiteXL debug signing key when cache is empty
+        shell: bash
         run: |
           mkdir -p "$HOME/.android"
-          keytool -genkeypair -v \
-            -keystore "$HOME/.android/sitexl-debug.keystore" \
-            -storepass android \
-            -alias sitexl-debug \
-            -keypass android \
-            -keyalg RSA -keysize 2048 -validity 10000 \
-            -dname "CN=SiteXL Keyboard Debug, OU=Development, O=SiteXL, L=Luxembourg, C=LU"
+          if [ ! -f "$HOME/.android/sitexl-debug.keystore" ]; then
+            keytool -genkeypair -noprompt -v \
+              -keystore "$HOME/.android/sitexl-debug.keystore" \
+              -storepass android \
+              -alias sitexl-debug \
+              -keypass android \
+              -keyalg RSA -keysize 2048 -validity 10000 \
+              -dname "CN=SiteXL Debug,O=SiteXL,C=LU"
+          fi
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          java-version: '17'
+          distribution: temurin
+
+      - uses: gradle/actions/setup-gradle@v3
+
+      - name: Grant execute permission for gradlew
+        run: chmod +x gradlew
 
       - name: Build debugFix APK
-        run: ./gradlew --no-daemon assembleDebugFix
+        run: ./gradlew assembleDebugFix
 
-      - name: Upload debugFix APK
+      - name: Upload side-by-side fixed APK
         uses: actions/upload-artifact@v4
         with:
-          name: sitexl-keyboard-debugFix
-          path: app/build/outputs/apk/debugFix/*.apk
+          name: SiteXL-Keyboard-debugFix
+          path: app/build/outputs/apk/debugFix/SiteXL_Keyboard_*-debugFix.apk
           if-no-files-found: error
           retention-days: 14
