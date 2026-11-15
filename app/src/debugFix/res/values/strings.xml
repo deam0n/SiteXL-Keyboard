@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="sitexl_app_name">SiteXL Keyboard (fix)</string>
+    <string name="clipboard_provider_authority" translatable="false">helium314.keyboard.clipprovider.debugfix</string>
+    <string name="gesture_data_provider_authority" translatable="false">helium314.keyboard.provider.debugfix</string>
+</resources>
