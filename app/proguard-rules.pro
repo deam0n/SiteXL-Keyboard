@@ -12,3 +12,10 @@
 # after upgrading to gradle 8, stack traces contain "unknown source"
 -keepattributes SourceFile,LineNumberTable
 -dontobfuscate
+
+# WorkManager creates its Room database implementation reflectively.
+# R8 full mode can otherwise remove the generated no-arg constructor.
+-keep class * extends androidx.room.RoomDatabase { <init>(); }
+
+# WorkManager also creates InputMerger implementations reflectively.
+-keep class * extends androidx.work.InputMerger { <init>(); }
