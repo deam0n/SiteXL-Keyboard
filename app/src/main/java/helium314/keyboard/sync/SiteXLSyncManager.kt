@@ -31,7 +31,6 @@ import java.io.ByteArrayOutputStream
 import java.io.File
 import java.io.IOException
 import java.net.URL
-import java.net.URI
 import java.security.MessageDigest
 import java.security.KeyStore
 import java.util.Locale
@@ -151,27 +150,84 @@ object SiteXLSyncManager {
     fun isLoggedIn(context: Context): Boolean = getToken(context).isNotBlank()
 
     private fun normalizeServerUrl(raw: String): String {
-        if (raw.isBlank()) throw IllegalArgumentException("Enter your SiteXL server URL.")
-
-        // Android keyboards/IME layers can insert invisible Unicode format marks.
-        // Strip those, plus surrounding Unicode whitespace, before validating.
-        val cleaned = raw
-            .filterNot { Character.getType(it) == Character.FORMAT.toInt() }
-            .trim { it.isWhitespace() || Character.isSpaceChar(it) }
-        val normalized = cleaned.trimEnd('/')
-        val parsed = runCatching { URI(normalized) }.getOrNull()
-            ?: throw IllegalArgumentException("Use a valid HTTPS server URL, for example https://keyboard.sitexl.net.")
-
-        val validPort = parsed.port == -1 || parsed.port in 1..65535
-        if (!parsed.isAbsolute || parsed.isOpaque ||
-            !parsed.scheme.equals("https", ignoreCase = true) ||
-            parsed.host.isNullOrBlank() || parsed.rawUserInfo != null ||
-            parsed.rawQuery != null || parsed.rawFragment != null ||
-            !parsed.rawPath.isNullOrEmpty() || !validPort
-        ) {
-            throw IllegalArgumentException("Use a valid HTTPS server URL, for example https://keyboard.sitexl.net.")
+        if (raw.isBlank()) {
+            throw IllegalArgumentException("Enter your SiteXL server URL.")
         }
-        return normalized
+
+        // Remove invisible Unicode format/control characters sometimes inserted
+        // by mobile keyboards, clipboard managers or text transformations.
+        val cleaned = raw
+            .filterNot { ch ->
+                Character.getType(ch) == Character.FORMAT.toInt() ||
+                    Character.isISOControl(ch)
+            }
+            .trim { it.isWhitespace() || Character.isSpaceChar(it) }
+            .trimEnd('/')
+
+        if (!cleaned.startsWith("https://", ignoreCase = true)) {
+            throw IllegalArgumentException("Server URL must start with https://")
+        }
+
+        val authority = cleaned.substring("https://".length)
+        if (authority.isBlank() || authority.contains('/') ||
+            authority.contains('\\') || authority.contains('?') ||
+            authority.contains('#') || authority.contains('@') ||
+            authority.any { it.isWhitespace() || Character.isSpaceChar(it) }
+        ) {
+            throw IllegalArgumentException(
+                "Enter only the HTTPS server address, without a path, credentials or query."
+            )
+        }
+
+        val colon = authority.lastIndexOf(':')
+        val host: String
+        val portText: String?
+        if (colon >= 0) {
+            if (authority.indexOf(':') != colon) {
+                throw IllegalArgumentException("IPv6 server addresses are not supported here.")
+            }
+            host = authority.substring(0, colon)
+            portText = authority.substring(colon + 1)
+            if (portText.isEmpty() || !portText.all { it in '0'..'9' }) {
+                throw IllegalArgumentException("The HTTPS port must be a number.")
+            }
+            val port = portText.toIntOrNull()
+            if (port == null || port !in 1..65535) {
+                throw IllegalArgumentException("The HTTPS port must be between 1 and 65535.")
+            }
+        } else {
+            host = authority
+            portText = null
+        }
+
+        val normalizedHost = host.lowercase(Locale.ROOT)
+        val isIpv4 = normalizedHost.matches(Regex("^(?:[0-9]{1,3}\\.){3}[0-9]{1,3}$")) &&
+            normalizedHost.split('.').all { it.toIntOrNull() in 0..255 }
+        val isDomain = normalizedHost.length <= 253 &&
+            normalizedHost.split('.').let { labels ->
+                labels.size >= 2 && labels.all { label ->
+                    label.length in 1..63 &&
+                        label.first().isLetterOrDigit() &&
+                        label.last().isLetterOrDigit() &&
+                        label.all { it.isLetterOrDigit() || it == '-' }
+                } && labels.last().length >= 2
+            }
+        val isLocalhost = normalizedHost == "localhost"
+
+        if (normalizedHost.isBlank() || !(isDomain || isIpv4 || isLocalhost)) {
+            throw IllegalArgumentException(
+                "Enter a valid HTTPS host, for example https://keyboard.sitexl.net."
+            )
+        }
+
+        return buildString {
+            append("https://")
+            append(normalizedHost)
+            if (portText != null) {
+                append(':')
+                append(portText)
+            }
+        }
     }
 
     suspend fun authenticate(
