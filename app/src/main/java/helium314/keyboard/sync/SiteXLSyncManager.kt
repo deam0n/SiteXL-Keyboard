@@ -668,12 +668,12 @@ object SiteXLSyncManager {
                 .mapValues { (it.value as Set<*>).filterIsInstance<String>().toSortedSet().toSet() }
                 .toSortedMap()
         return buildString {
-            append("boolean settings\\n").append(json.encodeToString(booleans))
-            append("\\nint settings\\n").append(json.encodeToString(ints))
-            append("\\nlong settings\\n").append(json.encodeToString(longs))
-            append("\\nfloat settings\\n").append(json.encodeToString(floats))
-            append("\\nstring settings\\n").append(json.encodeToString(strings))
-            append("\\nstring set settings\\n").append(json.encodeToString(stringSets))
+            append("boolean settings\n").append(json.encodeToString(booleans))
+            append("\nint settings\n").append(json.encodeToString(ints))
+            append("\nlong settings\n").append(json.encodeToString(longs))
+            append("\nfloat settings\n").append(json.encodeToString(floats))
+            append("\nstring settings\n").append(json.encodeToString(strings))
+            append("\nstring set settings\n").append(json.encodeToString(stringSets))
         }
     }
 
