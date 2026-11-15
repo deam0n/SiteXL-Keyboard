@@ -22,6 +22,15 @@ android {
         proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
     }
 
+    signingConfigs {
+        create("siteXLDebug") {
+            storeFile = File(System.getProperty("user.home"), ".android/sitexl-debug.keystore")
+            storePassword = "android"
+            keyAlias = "sitexl-debug"
+            keyPassword = "android"
+        }
+    }
+
     buildTypes {
         release {
             isMinifyEnabled = true
@@ -41,6 +50,7 @@ android {
             isMinifyEnabled = true
             isJniDebuggable = false
             applicationIdSuffix = ".debug"
+            signingConfig = signingConfigs.getByName("siteXLDebug")
         }
         create("runTests") { // build variant for running tests on CI that skips tests known to fail
             isMinifyEnabled = false
@@ -50,7 +60,7 @@ android {
             isDebuggable = true
             isMinifyEnabled = false
             isJniDebuggable = false
-            signingConfig = signingConfigs.getByName("debug")
+            signingConfig = signingConfigs.getByName("siteXLDebug")
             applicationIdSuffix = ".debug"
             //isDefault = true // would be nice as default, but breaks unit test handling in Android Studio
         }
