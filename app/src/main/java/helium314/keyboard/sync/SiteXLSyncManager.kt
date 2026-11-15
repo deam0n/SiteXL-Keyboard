@@ -3,7 +3,6 @@ package helium314.keyboard.sync
 import android.content.Context
 import android.content.SharedPreferences
 import android.content.Intent
-import android.net.Uri
 import android.os.Build
 import android.provider.UserDictionary
 import android.security.keystore.KeyGenParameterSpec
@@ -32,6 +31,7 @@ import java.io.ByteArrayOutputStream
 import java.io.File
 import java.io.IOException
 import java.net.URL
+import java.net.URI
 import java.security.MessageDigest
 import java.security.KeyStore
 import java.util.Locale
@@ -152,15 +152,25 @@ object SiteXLSyncManager {
 
     private fun normalizeServerUrl(raw: String): String {
         if (raw.isBlank()) throw IllegalArgumentException("Enter your SiteXL server URL.")
-        val normalized = raw.trim().trimEnd('/')
-        // Use Android's URI parser for validation. Constructing java.net.URL here
-        // can depend on protocol-handler lookup before any network request is made.
-        val parsed = Uri.parse(normalized)
-        val authority = parsed.encodedAuthority.orEmpty()
-        if (!parsed.isHierarchical || !parsed.scheme.equals("https", ignoreCase = true) ||
-            parsed.host.isNullOrBlank() || authority.contains('@') ||
-            parsed.encodedQuery != null || parsed.encodedFragment != null
-        ) throw IllegalArgumentException("Use a valid HTTPS server URL, without a username, password or query.")
+
+        // Android keyboards/IME layers can insert invisible Unicode format marks.
+        // Strip those, plus surrounding Unicode whitespace, before validating.
+        val cleaned = raw
+            .filterNot { Character.getType(it) == Character.FORMAT.toInt() }
+            .trim { it.isWhitespace() || it.isSpaceChar() }
+        val normalized = cleaned.trimEnd('/')
+        val parsed = runCatching { URI(normalized) }.getOrNull()
+            ?: throw IllegalArgumentException("Use a valid HTTPS server URL, for example https://keyboard.sitexl.net.")
+
+        val validPort = parsed.port == -1 || parsed.port in 1..65535
+        if (!parsed.isAbsolute || parsed.isOpaque ||
+            !parsed.scheme.equals("https", ignoreCase = true) ||
+            parsed.host.isNullOrBlank() || parsed.rawUserInfo != null ||
+            parsed.rawQuery != null || parsed.rawFragment != null ||
+            !parsed.rawPath.isNullOrEmpty() || !validPort
+        ) {
+            throw IllegalArgumentException("Use a valid HTTPS server URL, for example https://keyboard.sitexl.net.")
+        }
         return normalized
     }
 
