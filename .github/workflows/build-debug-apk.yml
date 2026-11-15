@@ -13,6 +13,14 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      # Keep the debug signing certificate stable between CI runs so
+      # users can install updates without uninstalling the previous APK.
+      - name: Cache Android debug signing key
+        uses: actions/cache@v4
+        with:
+          path: ~/.android/debug.keystore
+          key: sitexl-debug-keystore-v1
+
       - name: Set up JDK
         uses: actions/setup-java@v4
         with:
