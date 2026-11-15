@@ -52,6 +52,13 @@ android {
             applicationIdSuffix = ".debug"
             signingConfig = signingConfigs.getByName("siteXLDebug")
         }
+        // Side-by-side recovery build used to validate the account flow without
+        // replacing the existing .debug installation or erasing its local data.
+        create("debugFix") {
+            initWith(getByName("debug"))
+            applicationIdSuffix = ".debugfix"
+            signingConfig = signingConfigs.getByName("siteXLDebug")
+        }
         create("runTests") { // build variant for running tests on CI that skips tests known to fail
             isMinifyEnabled = false
             isJniDebuggable = false
@@ -66,7 +73,7 @@ android {
         }
 
         androidComponents.onVariants { variant: ApplicationVariant ->
-            if (variant.buildType == "debug") {
+            if (variant.buildType == "debug" || variant.buildType == "debugFix") {
                 // got a little too big for GitHub after some dependency upgrades, so we remove the largest dictionary
                 variant.androidResources.ignoreAssetsPatterns = listOf("main_ro.dict")
                 variant.proguardFiles = emptyList()
