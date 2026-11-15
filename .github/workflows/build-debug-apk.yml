@@ -15,11 +15,25 @@ jobs:
 
       # Keep the debug signing certificate stable between CI runs so
       # users can install updates without uninstalling the previous APK.
-      - name: Cache Android debug signing key
+      - name: Cache SiteXL debug signing keystore
         uses: actions/cache@v4
         with:
-          path: ~/.android/debug.keystore
+          path: ~/.android/sitexl-debug.keystore
           key: sitexl-debug-keystore-v1
+
+      - name: Create SiteXL debug signing key when cache is empty
+        shell: bash
+        run: |
+          mkdir -p "$HOME/.android"
+          if [ ! -f "$HOME/.android/sitexl-debug.keystore" ]; then
+            keytool -genkeypair -noprompt -v \
+              -keystore "$HOME/.android/sitexl-debug.keystore" \
+              -storepass android \
+              -alias sitexl-debug \
+              -keypass android \
+              -keyalg RSA -keysize 2048 -validity 10000 \
+              -dname "CN=SiteXL Debug,O=SiteXL,C=LU"
+          fi
 
       - name: Set up JDK
         uses: actions/setup-java@v4
