@@ -645,13 +645,28 @@ object SiteXLSyncManager {
     }
 
     private fun encodeSettings(settings: Map<String, *>): String {
-        val booleans = settings.filter { it.key is String && it.value is Boolean }.mapValues { it.value as Boolean }.toSortedMap()
-        val ints = settings.filter { it.key is String && it.value is Int }.mapValues { it.value as Int }.toSortedMap()
-        val longs = settings.filter { it.key is String && it.value is Long }.mapValues { it.value as Long }.toSortedMap()
-        val floats = settings.filter { it.key is String && it.value is Float }.mapValues { it.value as Float }.toSortedMap()
-        val strings = settings.filter { it.key is String && it.value is String }.mapValues { it.value as String }.toSortedMap()
-        val stringSets = settings.filter { it.key is String && it.value is Set<*> }
-            .mapValues { (it.value as Set<*>).filterIsInstance<String>().toSortedSet() }.toSortedMap()
+        // Keep deterministic key ordering, but expose values through kotlinx.serialization's
+        // standard Map/Set serializers. Calling toSortedMap() without an explicit Map type
+        // infers SortedMap and can cause TreeMap polymorphic serialization failures.
+        val booleans: Map<String, Boolean> =
+            settings.filter { it.key is String && it.value is Boolean }
+                .mapValues { it.value as Boolean }.toSortedMap()
+        val ints: Map<String, Int> =
+            settings.filter { it.key is String && it.value is Int }
+                .mapValues { it.value as Int }.toSortedMap()
+        val longs: Map<String, Long> =
+            settings.filter { it.key is String && it.value is Long }
+                .mapValues { it.value as Long }.toSortedMap()
+        val floats: Map<String, Float> =
+            settings.filter { it.key is String && it.value is Float }
+                .mapValues { it.value as Float }.toSortedMap()
+        val strings: Map<String, String> =
+            settings.filter { it.key is String && it.value is String }
+                .mapValues { it.value as String }.toSortedMap()
+        val stringSets: Map<String, Set<String>> =
+            settings.filter { it.key is String && it.value is Set<*> }
+                .mapValues { (it.value as Set<*>).filterIsInstance<String>().toSortedSet().toSet() }
+                .toSortedMap()
         return buildString {
             append("boolean settings\n").append(json.encodeToString(booleans))
             append("\nint settings\n").append(json.encodeToString(ints))

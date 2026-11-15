@@ -139,7 +139,10 @@ fun SiteXLAuthScreen(
             ) {
                 OutlinedTextField(
                     value = serverUrl,
-                    onValueChange = { serverUrl = it },
+                    onValueChange = {
+                        serverUrl = it
+                        status = ""
+                    },
                     modifier = Modifier.fillMaxWidth(),
                     label = { Text(stringResource(R.string.sitexl_auth_server)) },
                     placeholder = { Text("https://sync.example.net") },
@@ -148,7 +151,10 @@ fun SiteXLAuthScreen(
                 )
                 OutlinedTextField(
                     value = username,
-                    onValueChange = { username = it },
+                    onValueChange = {
+                        username = it
+                        status = ""
+                    },
                     modifier = Modifier.fillMaxWidth(),
                     label = { Text(stringResource(R.string.sitexl_auth_user)) },
                     singleLine = true,
@@ -156,7 +162,10 @@ fun SiteXLAuthScreen(
                 )
                 OutlinedTextField(
                     value = password,
-                    onValueChange = { password = it.take(128) },
+                    onValueChange = {
+                        password = it.take(128)
+                        status = ""
+                    },
                     modifier = Modifier.fillMaxWidth(),
                     label = { Text(stringResource(R.string.sitexl_auth_password)) },
                     supportingText = {

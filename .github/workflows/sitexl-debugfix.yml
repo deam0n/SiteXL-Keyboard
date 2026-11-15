@@ -1,0 +1,59 @@
+name: SiteXL Android debugFix build
+
+on:
+  push:
+    branches:
+      - fix/sorted-map-sync-serialization
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+
+      - name: Cache SiteXL debug signing keystore
+        uses: actions/cache@v4
+        with:
+          path: ~/.android/sitexl-debug.keystore
+          key: sitexl-debug-keystore-v1
+
+      - name: Create SiteXL debug signing key when cache is empty
+        shell: bash
+        run: |
+          mkdir -p "$HOME/.android"
+          if [ ! -f "$HOME/.android/sitexl-debug.keystore" ]; then
+            keytool -genkeypair -noprompt -v \
+              -keystore "$HOME/.android/sitexl-debug.keystore" \
+              -storepass android \
+              -alias sitexl-debug \
+              -keypass android \
+              -keyalg RSA -keysize 2048 -validity 10000 \
+              -dname "CN=SiteXL Debug,O=SiteXL,C=LU"
+          fi
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          java-version: '17'
+          distribution: temurin
+
+      - uses: gradle/actions/setup-gradle@v3
+
+      - name: Grant execute permission for gradlew
+        run: chmod +x gradlew
+
+      - name: Build debugFix APK
+        run: ./gradlew assembleDebugFix
+
+      - name: Upload side-by-side fixed APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: SiteXL-Keyboard-debugFix
+          path: app/build/outputs/apk/debugFix/SiteXL_Keyboard_*-debugFix.apk
+          if-no-files-found: error
+          retention-days: 14
