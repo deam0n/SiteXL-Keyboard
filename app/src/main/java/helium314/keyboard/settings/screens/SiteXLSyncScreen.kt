@@ -1,5 +1,10 @@
 package helium314.keyboard.settings.screens
 
+import android.content.pm.PackageManager
+import android.os.Build
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.core.content.ContextCompat
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -57,6 +62,7 @@ fun SiteXLAuthScreen(
     var password by remember { mutableStateOf("") }
     var working by remember { mutableStateOf(false) }
     var status by remember { mutableStateOf("") }
+    var pendingRegistration by remember { mutableStateOf<Boolean?>(null) }
     val scope = rememberCoroutineScope()
 
     fun submit(register: Boolean) {
@@ -79,6 +85,30 @@ fun SiteXLAuthScreen(
             } finally {
                 working = false
             }
+        }
+    }
+
+    val localNetworkPermissionLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestPermission()
+    ) { granted ->
+        val register = pendingRegistration
+        pendingRegistration = null
+        if (granted && register != null) {
+            submit(register)
+        } else if (!granted) {
+            status = context.getString(R.string.sitexl_auth_local_network_permission_denied)
+        }
+    }
+
+    fun submitWithLocalNetworkPermission(register: Boolean) {
+        val permission = "android.permission.ACCESS_LOCAL_NETWORK"
+        if (Build.VERSION.SDK_INT >= 37 &&
+            ContextCompat.checkSelfPermission(context, permission) != PackageManager.PERMISSION_GRANTED
+        ) {
+            pendingRegistration = register
+            localNetworkPermissionLauncher.launch(permission)
+        } else {
+            submit(register)
         }
     }
 
@@ -144,7 +174,7 @@ fun SiteXLAuthScreen(
                     )
                 }
                 Button(
-                    onClick = { submit(register = false) },
+                    onClick = { submitWithLocalNetworkPermission(register = false) },
                     enabled = !working && serverUrl.isNotBlank() &&
                         username.isNotBlank() && password.length >= 8,
                     modifier = Modifier.fillMaxWidth()
@@ -158,7 +188,7 @@ fun SiteXLAuthScreen(
                     Text(stringResource(R.string.sitexl_auth_login))
                 }
                 OutlinedButton(
-                    onClick = { submit(register = true) },
+                    onClick = { submitWithLocalNetworkPermission(register = true) },
                     enabled = !working && serverUrl.isNotBlank() &&
                         username.isNotBlank() && password.length >= 8,
                     modifier = Modifier.fillMaxWidth()
