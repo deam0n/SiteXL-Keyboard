@@ -3,6 +3,7 @@ package helium314.keyboard.sync
 import android.content.Context
 import android.content.SharedPreferences
 import android.content.Intent
+import android.net.Uri
 import android.os.Build
 import android.provider.UserDictionary
 import android.security.keystore.KeyGenParameterSpec
@@ -152,11 +153,13 @@ object SiteXLSyncManager {
     private fun normalizeServerUrl(raw: String): String {
         if (raw.isBlank()) throw IllegalArgumentException("Enter your SiteXL server URL.")
         val normalized = raw.trim().trimEnd('/')
-        val parsed = runCatching { URL(normalized) }.getOrElse {
-            throw IllegalArgumentException("The server URL is not valid.")
-        }
-        if (parsed.protocol != "https" || parsed.host.isBlank() || parsed.userInfo != null ||
-            parsed.query != null || parsed.ref != null
+        // Use Android's URI parser for validation. Constructing java.net.URL here
+        // can depend on protocol-handler lookup before any network request is made.
+        val parsed = Uri.parse(normalized)
+        val authority = parsed.encodedAuthority.orEmpty()
+        if (!parsed.isHierarchical || !parsed.scheme.equals("https", ignoreCase = true) ||
+            parsed.host.isNullOrBlank() || authority.contains('@') ||
+            parsed.encodedQuery != null || parsed.encodedFragment != null
         ) throw IllegalArgumentException("Use a valid HTTPS server URL, without a username, password or query.")
         return normalized
     }
