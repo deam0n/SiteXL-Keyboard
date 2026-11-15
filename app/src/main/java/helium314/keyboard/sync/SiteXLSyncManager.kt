@@ -202,7 +202,7 @@ object SiteXLSyncManager {
 
         val normalizedHost = host.lowercase(Locale.ROOT)
         val isIpv4 = normalizedHost.matches(Regex("^(?:[0-9]{1,3}\\.){3}[0-9]{1,3}$")) &&
-            normalizedHost.split('.').all { it.toIntOrNull() in 0..255 }
+            normalizedHost.split('.').all { part -> part.toIntOrNull()?.let { it in 0..255 } == true }
         val isDomain = normalizedHost.length <= 253 &&
             normalizedHost.split('.').let { labels ->
                 labels.size >= 2 && labels.all { label ->
