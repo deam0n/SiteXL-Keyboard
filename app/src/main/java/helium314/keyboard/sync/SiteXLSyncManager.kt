@@ -157,7 +157,7 @@ object SiteXLSyncManager {
         // Strip those, plus surrounding Unicode whitespace, before validating.
         val cleaned = raw
             .filterNot { Character.getType(it) == Character.FORMAT.toInt() }
-            .trim { it.isWhitespace() || it.isSpaceChar() }
+            .trim { it.isWhitespace() || Character.isSpaceChar(it) }
         val normalized = cleaned.trimEnd('/')
         val parsed = runCatching { URI(normalized) }.getOrNull()
             ?: throw IllegalArgumentException("Use a valid HTTPS server URL, for example https://keyboard.sitexl.net.")
